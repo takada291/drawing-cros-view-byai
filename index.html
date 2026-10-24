@@ -140,7 +140,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v0.4</h1>
+        <h1>AI横断 v0.5</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -244,10 +244,10 @@
                 const data = await response.json(); 
                 const models = data.models || []; 
                 const capableModels = models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")); 
-                // 確実に動作するモデルを探す。
-                let bestModel = capableModels.find(m => m.name.includes("gemini-1.5-pro") && !m.name.includes("latest") && !m.name.includes("vision")); 
-                if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-2.5-flash")); 
-                if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-1.5-flash")); 
+                // 確実に動作するモデルの完全一致検索
+                let bestModel = capableModels.find(m => m.name === "models/gemini-1.5-pro"); 
+                if (!bestModel) bestModel = capableModels.find(m => m.name === "models/gemini-2.5-flash"); 
+                if (!bestModel) bestModel = capableModels.find(m => m.name === "models/gemini-1.5-flash"); 
                 if (bestModel) return bestModel.name.replace("models/", ""); 
                 return "gemini-1.5-pro"; 
             } catch (e) { 
@@ -292,7 +292,7 @@
                         <tr>
                             <th>No</th>
                             <th>横 (dx) m</th>
-                            <th>縦 (dy) m<br><span style="font-size:0.7rem; font-weight:normal;">※下方向が正(+)</span></th>
+                            <th>縦 (dy) m<br><span style="font-size:0.7rem; font-weight:normal;">※下りが正(+)、上りが負(-)</span></th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -311,6 +311,7 @@
                             <button class="del-row-btn" data-sidx="${stationIndex}" data-segidx="${segIndex}">－</button>
                         </td>
                     `;
+                    // 最初のセグメントのdx入力制御を解除（横移動が発生し得るため）
                     tbody.appendChild(tr);
                 });
                 wrapper.appendChild(table);
@@ -477,24 +478,23 @@
                     画像上部には「No.0」などの測点名が書かれています。
                     その下には階段状の図形が描かれており、各段に寸法が記載されています。
                     階段の【上段（水平線の上）】の数値は水平距離（dx）、【下段（垂直線の横または下）】の数値は垂直距離（dy）を表します。
-                    左上から右下に向かって、順番に各段の(dx, dy)の数値を読み取ってください。
                     
                     【重要ルール】
-                    1. 一番最初の段の水平距離(dx)も重要なデータです。0にせず、画像に書かれている数値を正確に読み取ってください。
-                    2. 「m」という単位は除外して数値のみ抽出してください。
-                    3. 複数の画像がアップロードされた場合は、1画像＝1測点として配列に入れてください。
+                    1. 画像の【左端から右端に向かって】順番に各段の(dx, dy)の数値を読み取ってください。
+                    2. 階段の「上がり・下がり」を判断してください。
+                       - 階段が【下り】（右下へ進む）の場合、垂直距離(dy)は「プラス」の値にしてください。
+                       - 階段が【上り】（右上へ進む）の場合、垂直距離(dy)は「マイナス」の値にしてください。
+                    3. 一番最初の段の水平距離(dx)も重要なデータです。0にせず、画像に書かれている数値を正確に読み取ってください。
+                    4. 「m」という単位は除外して数値のみ抽出してください。
+                    5. 複数の画像がアップロードされた場合は、1画像＝1測点として配列に入れてください。
                     
                     出力フォーマット（JSON形式のみ出力。Markdown記法は禁止）:
                     [
                       {
-                        "stationName": "No.0",
+                        "stationName": "No.1",
                         "segments": [
-                          {"dx": 1.0, "dy": 1.0},
-                          {"dx": 2.0, "dy": 1.0},
-                          {"dx": 1.5, "dy": 1.0},
-                          {"dx": 1.0, "dy": 2.0},
-                          {"dx": 1.5, "dy": 1.0},
-                          {"dx": 2.0, "dy": 1.0}
+                          {"dx": 2.0, "dy": -1.0},
+                          {"dx": 1.5, "dy": -1.5}
                         ]
                       }
                     ]
@@ -542,7 +542,7 @@
                     
                     // 階段ではなく、直接地表面の次のポイントを計算
                     let nextX = curX + dx;
-                    let nextY = curY - dy; // 野帳の下方向(dy>0)はDXFでは-Y方向
+                    let nextY = curY - dy; // 下方向(dy>0)はDXFでは-Y方向、上方向(dy<0)は+Y方向
                     
                     // 始点(curX, curY)から終点(nextX, nextY)へ直線を引く（桃色の線に該当）
                     dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${nextX}\n21\n${nextY}\n`;
