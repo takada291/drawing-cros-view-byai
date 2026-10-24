@@ -138,7 +138,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v0.2</h1>
+        <h1>AI横断 v0.3</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -235,17 +235,18 @@
             try {
                 loadingDetail.innerText = "最適なAIモデルを探しています...";
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`); 
-                if (!response.ok) return "gemini-1.5-pro-latest"; 
+                if (!response.ok) return "gemini-1.5-pro"; 
                 const data = await response.json(); 
                 const models = data.models || []; 
                 const capableModels = models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")); 
-                let bestModel = capableModels.find(m => m.name.includes("gemini-1.5-pro-latest"));
-                if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-1.5-pro") && !m.name.includes("vision")); 
+                // 確実に動作するモデルを探す。pro-latestは除外して安定板のproを探す
+                let bestModel = capableModels.find(m => m.name.includes("gemini-1.5-pro") && !m.name.includes("latest") && !m.name.includes("vision")); 
+                if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-2.5-flash")); 
                 if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-1.5-flash")); 
                 if (bestModel) return bestModel.name.replace("models/", ""); 
-                return "gemini-1.5-pro-latest"; 
+                return "gemini-1.5-pro"; 
             } catch (e) { 
-                return "gemini-1.5-pro-latest"; 
+                return "gemini-1.5-pro"; 
             } 
         } 
         
