@@ -183,7 +183,7 @@
         const stationsContainer = document.getElementById('stations-container');
         const btnDxf = document.getElementById('btn-dxf');
 
-        let parsedData = []; // [{stationName: "No.0", segments: [{dx: 1, dy: 1}, ...]}, ...]
+        let parsedData = []; 
 
         const savedKey = localStorage.getItem('gemini_api_key_gnss');
         if(savedKey) apiKeyInput.value = savedKey;
@@ -239,7 +239,6 @@
                 const data = await response.json(); 
                 const models = data.models || []; 
                 const capableModels = models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")); 
-                // 手書き図面の空間認識にはProが必須レベル
                 let bestModel = capableModels.find(m => m.name.includes("gemini-1.5-pro") && !m.name.includes("vision")); 
                 if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-1.5-flash")); 
                 if (bestModel) return bestModel.name.replace("models/", ""); 
@@ -265,7 +264,6 @@
                 const wrapper = document.createElement('div');
                 wrapper.style.marginBottom = "40px";
                 
-                // ヘッダー（測点名入力）
                 const header = document.createElement('div');
                 header.className = 'station-header';
                 header.innerHTML = `
@@ -275,14 +273,12 @@
                 `;
                 wrapper.appendChild(header);
                 
-                // SVG描画エリア
                 const svgDiv = document.createElement('div');
                 svgDiv.id = `svg-area-${stationIndex}`;
                 svgDiv.style.textAlign = 'center';
                 svgDiv.style.marginBottom = '10px';
                 wrapper.appendChild(svgDiv);
                 
-                // テーブルエリア
                 const table = document.createElement('table');
                 table.innerHTML = `
                     <thead>
@@ -308,7 +304,6 @@
                             <button class="del-row-btn" data-sidx="${stationIndex}" data-segidx="${segIndex}">－</button>
                         </td>
                     `;
-                    // 最初のセグメント（最初の縦線）はdxを入力不可(または0扱い)にするのがポール横断の通例
                     if(segIndex === 0) {
                         tr.querySelector('input[data-field="dx"]').disabled = true;
                         tr.querySelector('input[data-field="dx"]').style.backgroundColor = "#eee";
@@ -332,17 +327,13 @@
             let curX = 0;
             let curY = 0;
             
-            // セグメントを順番に足し合わせて座標を計算
-            // 野帳の下方向(dy)を画面上の下(+Y方向)、横方向(dx)を画面上の右(+X方向)とする
             station.segments.forEach((seg, idx) => {
                 let dx = parseFloat(seg.dx) || 0;
                 let dy = parseFloat(seg.dy) || 0;
-                if(idx === 0) dx = 0; // 最初の段の横移動はなし
+                if(idx === 0) dx = 0; 
                 
-                // 横移動
                 curX += dx;
                 pts.push({x: curX, y: curY});
-                // 縦移動
                 curY += dy;
                 pts.push({x: curX, y: curY});
             });
@@ -357,15 +348,12 @@
             let spanX = (maxX - minX) || 1;
             let spanY = (maxY - minY) || 1;
             
-            // SVGのキャンバスサイズ（レスポンシブ用にviewBoxを使用）
             const svgW = 600;
             const svgH = 400;
             const padding = 40;
             
-            // 縦横比を維持したスケール
             let scale = Math.min((svgW - padding * 2) / spanX, (svgH - padding * 2) / spanY);
             
-            // 中央寄せのためのオフセット
             let offsetX = (svgW - spanX * scale) / 2 - minX * scale;
             let offsetY = (svgH - spanY * scale) / 2 - minY * scale;
             
@@ -375,7 +363,6 @@
             svg.setAttribute('width', '100%');
             svg.setAttribute('style', 'max-width: 600px;');
             
-            // パス文字列の生成
             let pathD = pts.map((p, i) => {
                 let px = p.x * scale + offsetX;
                 let py = p.y * scale + offsetY;
@@ -390,7 +377,6 @@
             path.setAttribute('stroke-linejoin', 'round');
             svg.appendChild(path);
             
-            // 始点マーカー
             const startCircle = document.createElementNS(ns, 'circle');
             startCircle.setAttribute('cx', pts[0].x * scale + offsetX);
             startCircle.setAttribute('cy', pts[0].y * scale + offsetY);
@@ -424,7 +410,7 @@
                 btn.addEventListener('click', (e) => {
                     const sidx = parseInt(e.target.dataset.sidx);
                     const segidx = parseInt(e.target.dataset.segidx);
-                    parsedData[sidx].segments.splice(segidx + 1, 0, {dx: 1.0, dy: 1.0}); // デフォ値を挿入
+                    parsedData[sidx].segments.splice(segidx + 1, 0, {dx: 1.0, dy: 1.0}); 
                     renderAll();
                 });
             });
@@ -504,8 +490,8 @@
             } catch (error) {
                 console.error(error);
                 playSound('error');
-                alert('解析に失敗しました。画像の鮮明さを確認するか、再度お試しください。
-' + error.message);
+                // ▼ ここにあったエラー表示の改行を修正しました ▼
+                alert('解析に失敗しました。画像の鮮明さを確認するか、再度お試しください。\n' + error.message);
             } finally {
                 btn.disabled = false; loading.style.display = 'none';
             }
@@ -515,11 +501,7 @@
         btnDxf.addEventListener('click', () => {
             if(parsedData.length === 0) return;
             
-            let dxf = `0
-SECTION
-2
-ENTITIES
-`;
+            let dxf = `0\nSECTION\n2\nENTITIES\n`;
             
             // 複数の測点をX方向にずらしながら描画する（重ならないように）
             let offsetX = 0;
@@ -529,19 +511,7 @@ ENTITIES
                 let curY = 0; // DXFはY上が正
                 
                 // 測点名テキスト
-                dxf += `0
-TEXT
-8
-0
-10
-${curX}
-20
-${curY + 2}
-40
-1.0
-1
-${station.stationName}
-`;
+                dxf += `0\nTEXT\n8\n0\n10\n${curX}\n20\n${curY + 2}\n40\n1.0\n1\n${station.stationName}\n`;
                 
                 station.segments.forEach((seg, idx) => {
                     let dx = parseFloat(seg.dx) || 0;
@@ -551,38 +521,14 @@ ${station.stationName}
                     // 横移動線（dx）
                     if (dx > 0) {
                         let nextX = curX + dx;
-                        dxf += `0
-LINE
-8
-0
-10
-${curX}
-20
-${curY}
-11
-${nextX}
-21
-${curY}
-`;
+                        dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${nextX}\n21\n${curY}\n`;
                         curX = nextX;
                     }
                     
                     // 縦移動線（dy）※野帳の下方向はDXFでは-Y方向
                     if (dy > 0) {
                         let nextY = curY - dy;
-                        dxf += `0
-LINE
-8
-0
-10
-${curX}
-20
-${curY}
-11
-${curX}
-21
-${nextY}
-`;
+                        dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${curX}\n21\n${nextY}\n`;
                         curY = nextY;
                     }
                 });
@@ -590,11 +536,7 @@ ${nextY}
                 offsetX += 15; // 次の測点は右に15mずらして描画
             });
             
-            dxf += `0
-ENDSEC
-0
-EOF
-`;
+            dxf += `0\nENDSEC\n0\nEOF\n`;
             
             const blob = new Blob([dxf], { type: 'text/plain' });
             const link = document.createElement('a');
