@@ -26,6 +26,8 @@
             --primary: #2c3e50;
             --bg-color: #f8f9fa;
             --accent: #27ae60;
+            --pink: #e84393;
+            --gray: #95a5a6;
             --error-bg: #ffe6e6;
             --success-bg: #e6ffe6;
         }
@@ -62,10 +64,10 @@
             transition: background 0.3s;
             margin-top: 10px;
         }
-        .btn-run:hover, .btn-dxf:hover { background-color: #1e8449; }
-        .btn-run:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-run:hover { background-color: #1e8449; }
         .btn-dxf { background-color: #2980b9; }
         .btn-dxf:hover { background-color: #1c5980; }
+        .btn-run:disabled { background-color: #ccc; cursor: not-allowed; }
         
         .api-note {
             font-size: 0.8rem; color: #666; background: #eee;
@@ -138,7 +140,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v0.3</h1>
+        <h1>AI横断 v0.4</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -163,11 +165,14 @@
 
         <div id="result-area">
             <h2 style="color: var(--primary); border-bottom: 2px solid #ccc; padding-bottom: 5px;">解析結果プレビュー</h2>
-            <p style="font-size: 0.85rem; color: #666;">数値を修正すると図形が自動更新されます。「縦(dy)」は下方向を正(+)として入力してください。</p>
+            <p style="font-size: 0.85rem; color: #666;">
+                数値を修正すると図形が自動更新されます。<br>
+                <span style="color: var(--pink); font-weight: bold;">桃色の線（地表面）</span>がDXF化されます。（灰色の破線はポールとテープの階段状の補助線です）
+            </p>
             
             <div id="stations-container"></div>
             
-            <button class="btn-dxf" id="btn-dxf" style="margin-top: 30px;">DXFで一括保存</button>
+            <button class="btn-dxf" id="btn-dxf" style="margin-top: 30px;">桃色の線をDXFで一括保存</button>
         </div>
     </div>
 
@@ -239,7 +244,7 @@
                 const data = await response.json(); 
                 const models = data.models || []; 
                 const capableModels = models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")); 
-                // 確実に動作するモデルを探す。pro-latestは除外して安定板のproを探す
+                // 確実に動作するモデルを探す。
                 let bestModel = capableModels.find(m => m.name.includes("gemini-1.5-pro") && !m.name.includes("latest") && !m.name.includes("vision")); 
                 if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-2.5-flash")); 
                 if (!bestModel) bestModel = capableModels.find(m => m.name.includes("gemini-1.5-flash")); 
@@ -299,17 +304,13 @@
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${segIndex + 1}</td>
-                        <td><input type="number" step="0.01" class="editable-input" data-sidx="${stationIndex}" data-segidx="${segIndex}" data-field="dx" value="${segIndex === 0 ? '' : seg.dx}"></td>
+                        <td><input type="number" step="0.01" class="editable-input" data-sidx="${stationIndex}" data-segidx="${segIndex}" data-field="dx" value="${seg.dx}"></td>
                         <td><input type="number" step="0.01" class="editable-input" data-sidx="${stationIndex}" data-segidx="${segIndex}" data-field="dy" value="${seg.dy}"></td>
                         <td>
                             <button class="add-row-btn" data-sidx="${stationIndex}" data-segidx="${segIndex}">＋</button>
                             <button class="del-row-btn" data-sidx="${stationIndex}" data-segidx="${segIndex}">－</button>
                         </td>
                     `;
-                    if(segIndex === 0) {
-                        tr.querySelector('input[data-field="dx"]').disabled = true;
-                        tr.querySelector('input[data-field="dx"]').style.backgroundColor = "#eee";
-                    }
                     tbody.appendChild(tr);
                 });
                 wrapper.appendChild(table);
@@ -325,27 +326,31 @@
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             
-            let pts = [{x: 0, y: 0}];
+            let groundPts = [{x: 0, y: 0}];
+            let stairPts = [{x: 0, y: 0}];
             let curX = 0;
             let curY = 0;
             
-            station.segments.forEach((seg, idx) => {
+            station.segments.forEach((seg) => {
                 let dx = parseFloat(seg.dx) || 0;
                 let dy = parseFloat(seg.dy) || 0;
-                if(idx === 0) dx = 0; 
                 
+                // 階段の頂点（水平移動後、垂直移動）
+                stairPts.push({x: curX + dx, y: curY});
+                stairPts.push({x: curX + dx, y: curY + dy});
+                
+                // 地表面の頂点（累計座標）
                 curX += dx;
-                pts.push({x: curX, y: curY});
                 curY += dy;
-                pts.push({x: curX, y: curY});
+                groundPts.push({x: curX, y: curY});
             });
             
-            if(pts.length < 2) return;
+            if(groundPts.length < 2) return;
 
-            let minX = Math.min(...pts.map(p => p.x));
-            let maxX = Math.max(...pts.map(p => p.x));
-            let minY = Math.min(...pts.map(p => p.y));
-            let maxY = Math.max(...pts.map(p => p.y));
+            let minX = Math.min(...stairPts.map(p => p.x));
+            let maxX = Math.max(...stairPts.map(p => p.x));
+            let minY = Math.min(...stairPts.map(p => p.y));
+            let maxY = Math.max(...stairPts.map(p => p.y));
             
             let spanX = (maxX - minX) || 1;
             let spanY = (maxY - minY) || 1;
@@ -365,23 +370,40 @@
             svg.setAttribute('width', '100%');
             svg.setAttribute('style', 'max-width: 600px;');
             
-            let pathD = pts.map((p, i) => {
+            // 階段の補助線（グレーの破線）
+            let stairPathD = stairPts.map((p, i) => {
                 let px = p.x * scale + offsetX;
                 let py = p.y * scale + offsetY;
                 return `${i === 0 ? 'M' : 'L'}${px},${py}`;
             }).join(' ');
             
-            const path = document.createElementNS(ns, 'path');
-            path.setAttribute('d', pathD);
-            path.setAttribute('fill', 'none');
-            path.setAttribute('stroke', '#2c3e50');
-            path.setAttribute('stroke-width', '3');
-            path.setAttribute('stroke-linejoin', 'round');
-            svg.appendChild(path);
+            const stairPath = document.createElementNS(ns, 'path');
+            stairPath.setAttribute('d', stairPathD);
+            stairPath.setAttribute('fill', 'none');
+            stairPath.setAttribute('stroke', 'var(--gray)');
+            stairPath.setAttribute('stroke-width', '2');
+            stairPath.setAttribute('stroke-dasharray', '4 4');
+            svg.appendChild(stairPath);
+
+            // 地表面の実線（ピンク色の太線）
+            let groundPathD = groundPts.map((p, i) => {
+                let px = p.x * scale + offsetX;
+                let py = p.y * scale + offsetY;
+                return `${i === 0 ? 'M' : 'L'}${px},${py}`;
+            }).join(' ');
             
+            const groundPath = document.createElementNS(ns, 'path');
+            groundPath.setAttribute('d', groundPathD);
+            groundPath.setAttribute('fill', 'none');
+            groundPath.setAttribute('stroke', 'var(--pink)');
+            groundPath.setAttribute('stroke-width', '4');
+            groundPath.setAttribute('stroke-linejoin', 'round');
+            svg.appendChild(groundPath);
+            
+            // 始点マーカー（赤丸）
             const startCircle = document.createElementNS(ns, 'circle');
-            startCircle.setAttribute('cx', pts[0].x * scale + offsetX);
-            startCircle.setAttribute('cy', pts[0].y * scale + offsetY);
+            startCircle.setAttribute('cx', groundPts[0].x * scale + offsetX);
+            startCircle.setAttribute('cy', groundPts[0].y * scale + offsetY);
             startCircle.setAttribute('r', '5');
             startCircle.setAttribute('fill', '#e74c3c');
             svg.appendChild(startCircle);
@@ -458,7 +480,7 @@
                     左上から右下に向かって、順番に各段の(dx, dy)の数値を読み取ってください。
                     
                     【重要ルール】
-                    1. 一番最初の縦の線の距離は、1段目のdyとします。このときdxは0（またはnull）として構いません。
+                    1. 一番最初の段の水平距離(dx)も重要なデータです。0にせず、画像に書かれている数値を正確に読み取ってください。
                     2. 「m」という単位は除外して数値のみ抽出してください。
                     3. 複数の画像がアップロードされた場合は、1画像＝1測点として配列に入れてください。
                     
@@ -467,7 +489,7 @@
                       {
                         "stationName": "No.0",
                         "segments": [
-                          {"dx": 0, "dy": 1.0},
+                          {"dx": 1.0, "dy": 1.0},
                           {"dx": 2.0, "dy": 1.0},
                           {"dx": 1.5, "dy": 1.0},
                           {"dx": 1.0, "dy": 2.0},
@@ -498,13 +520,12 @@
             }
         });
 
-        // DXFエクスポート機能
+        // DXFエクスポート機能（地表面の実線のみ出力）
         btnDxf.addEventListener('click', () => {
             if(parsedData.length === 0) return;
             
             let dxf = `0\nSECTION\n2\nENTITIES\n`;
             
-            // 複数の測点をX方向にずらしながら描画する（重ならないように）
             let offsetX = 0;
             
             parsedData.forEach((station) => {
@@ -514,24 +535,20 @@
                 // 測点名テキスト
                 dxf += `0\nTEXT\n8\n0\n10\n${curX}\n20\n${curY + 2}\n40\n1.0\n1\n${station.stationName}\n`;
                 
-                station.segments.forEach((seg, idx) => {
+                station.segments.forEach((seg) => {
                     let dx = parseFloat(seg.dx) || 0;
                     let dy = parseFloat(seg.dy) || 0;
-                    if(idx === 0) dx = 0;
+                    if(dx === 0 && dy === 0) return;
                     
-                    // 横移動線（dx）
-                    if (dx > 0) {
-                        let nextX = curX + dx;
-                        dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${nextX}\n21\n${curY}\n`;
-                        curX = nextX;
-                    }
+                    // 階段ではなく、直接地表面の次のポイントを計算
+                    let nextX = curX + dx;
+                    let nextY = curY - dy; // 野帳の下方向(dy>0)はDXFでは-Y方向
                     
-                    // 縦移動線（dy）※野帳の下方向はDXFでは-Y方向
-                    if (dy > 0) {
-                        let nextY = curY - dy;
-                        dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${curX}\n21\n${nextY}\n`;
-                        curY = nextY;
-                    }
+                    // 始点(curX, curY)から終点(nextX, nextY)へ直線を引く（桃色の線に該当）
+                    dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${nextX}\n21\n${nextY}\n`;
+                    
+                    curX = nextX;
+                    curY = nextY;
                 });
                 
                 offsetX += 15; // 次の測点は右に15mずらして描画
