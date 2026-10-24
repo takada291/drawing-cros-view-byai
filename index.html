@@ -53,7 +53,7 @@
             display: block; font-weight: bold; margin-bottom: 5px;
             color: var(--primary); font-size: 0.9rem;
         }
-        input[type="password"], input[type="file"] {
+        input[type="password"], input[type="file"], select {
             width: 100%; padding: 10px; border: 1px solid #ccc;
             border-radius: 4px; box-sizing: border-box;
         }
@@ -140,7 +140,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v0.5</h1>
+        <h1>AI横断 v0.6</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -169,6 +169,18 @@
                 数値を修正すると図形が自動更新されます。<br>
                 <span style="color: var(--pink); font-weight: bold;">桃色の線（地表面）</span>がDXF化されます。（灰色の破線はポールとテープの階段状の補助線です）
             </p>
+
+            <div class="input-group" style="margin-top: 15px;">
+                <label>DXF出力時の縮尺</label>
+                <select id="export-scale">
+                    <option value="50">1/50</option>
+                    <option value="100" selected>1/100</option>
+                    <option value="200">1/200</option>
+                    <option value="250">1/250</option>
+                    <option value="500">1/500</option>
+                </select>
+                <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">※横断面図アプリ等に読み込む際の縮尺に合わせてください。</p>
+            </div>
             
             <div id="stations-container"></div>
             
@@ -187,6 +199,7 @@
         const imageInput = document.getElementById('image-upload');
         const stationsContainer = document.getElementById('stations-container');
         const btnDxf = document.getElementById('btn-dxf');
+        const exportScaleInput = document.getElementById('export-scale');
 
         let parsedData = []; 
 
@@ -244,7 +257,6 @@
                 const data = await response.json(); 
                 const models = data.models || []; 
                 const capableModels = models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent")); 
-                // 確実に動作するモデルの完全一致検索
                 let bestModel = capableModels.find(m => m.name === "models/gemini-1.5-pro"); 
                 if (!bestModel) bestModel = capableModels.find(m => m.name === "models/gemini-2.5-flash"); 
                 if (!bestModel) bestModel = capableModels.find(m => m.name === "models/gemini-1.5-flash"); 
@@ -311,7 +323,6 @@
                             <button class="del-row-btn" data-sidx="${stationIndex}" data-segidx="${segIndex}">－</button>
                         </td>
                     `;
-                    // 最初のセグメントのdx入力制御を解除（横移動が発生し得るため）
                     tbody.appendChild(tr);
                 });
                 wrapper.appendChild(table);
@@ -336,11 +347,9 @@
                 let dx = parseFloat(seg.dx) || 0;
                 let dy = parseFloat(seg.dy) || 0;
                 
-                // 階段の頂点（水平移動後、垂直移動）
                 stairPts.push({x: curX + dx, y: curY});
                 stairPts.push({x: curX + dx, y: curY + dy});
                 
-                // 地表面の頂点（累計座標）
                 curX += dx;
                 curY += dy;
                 groundPts.push({x: curX, y: curY});
@@ -371,7 +380,6 @@
             svg.setAttribute('width', '100%');
             svg.setAttribute('style', 'max-width: 600px;');
             
-            // 階段の補助線（グレーの破線）
             let stairPathD = stairPts.map((p, i) => {
                 let px = p.x * scale + offsetX;
                 let py = p.y * scale + offsetY;
@@ -386,7 +394,6 @@
             stairPath.setAttribute('stroke-dasharray', '4 4');
             svg.appendChild(stairPath);
 
-            // 地表面の実線（ピンク色の太線）
             let groundPathD = groundPts.map((p, i) => {
                 let px = p.x * scale + offsetX;
                 let py = p.y * scale + offsetY;
@@ -401,7 +408,6 @@
             groundPath.setAttribute('stroke-linejoin', 'round');
             svg.appendChild(groundPath);
             
-            // 始点マーカー（赤丸）
             const startCircle = document.createElementNS(ns, 'circle');
             startCircle.setAttribute('cx', groundPts[0].x * scale + offsetX);
             startCircle.setAttribute('cy', groundPts[0].y * scale + offsetY);
@@ -520,9 +526,12 @@
             }
         });
 
-        // DXFエクスポート機能（地表面の実線のみ出力）
+        // DXFエクスポート機能（縮尺対応）
         btnDxf.addEventListener('click', () => {
             if(parsedData.length === 0) return;
+            
+            const scale = parseFloat(exportScaleInput.value) || 100;
+            const multiplier = 1000 / scale;
             
             let dxf = `0\nSECTION\n2\nENTITIES\n`;
             
@@ -530,28 +539,31 @@
             
             parsedData.forEach((station) => {
                 let curX = offsetX;
-                let curY = 0; // DXFはY上が正
+                let curY = 0; 
                 
-                // 測点名テキスト
-                dxf += `0\nTEXT\n8\n0\n10\n${curX}\n20\n${curY + 2}\n40\n1.0\n1\n${station.stationName}\n`;
+                const textHeight = 2.0 * (100 / scale); 
+                dxf += `0\nTEXT\n8\n0\n10\n${curX * multiplier}\n20\n${(curY + 2) * multiplier}\n40\n${textHeight}\n1\n${station.stationName}\n`;
                 
                 station.segments.forEach((seg) => {
                     let dx = parseFloat(seg.dx) || 0;
                     let dy = parseFloat(seg.dy) || 0;
                     if(dx === 0 && dy === 0) return;
                     
-                    // 階段ではなく、直接地表面の次のポイントを計算
                     let nextX = curX + dx;
-                    let nextY = curY - dy; // 下方向(dy>0)はDXFでは-Y方向、上方向(dy<0)は+Y方向
+                    let nextY = curY - dy; 
                     
-                    // 始点(curX, curY)から終点(nextX, nextY)へ直線を引く（桃色の線に該当）
-                    dxf += `0\nLINE\n8\n0\n10\n${curX}\n20\n${curY}\n11\n${nextX}\n21\n${nextY}\n`;
+                    const outCurX = curX * multiplier;
+                    const outCurY = curY * multiplier;
+                    const outNextX = nextX * multiplier;
+                    const outNextY = nextY * multiplier;
+                    
+                    dxf += `0\nLINE\n8\n0\n10\n${outCurX}\n20\n${outCurY}\n11\n${outNextX}\n21\n${outNextY}\n`;
                     
                     curX = nextX;
                     curY = nextY;
                 });
                 
-                offsetX += 15; // 次の測点は右に15mずらして描画
+                offsetX += 15; 
             });
             
             dxf += `0\nENDSEC\n0\nEOF\n`;
@@ -559,7 +571,7 @@
             const blob = new Blob([dxf], { type: 'text/plain' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'AI横断_出力.dxf';
+            link.download = `AI横断_S${scale}_出力.dxf`;
             link.click();
         });
 
