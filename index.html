@@ -140,7 +140,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v0.7</h1>
+        <h1>AI横断 v0.8</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -153,21 +153,21 @@
         <div class="input-group">
             <label>ポール横断野帳の画像を選択</label>
             <input type="file" id="image-upload" accept="image/*" multiple>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">※階段状の図（上段が横(dx)、下段が縦(dy)）の画像をアップロードしてください。上に書かれた測点名（例：No.0）も読み取ります。複数枚選択可。</p>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">※階段状の図の画像をアップロードしてください。下段（縦:dy）の数値には「⊕(上り)」または「⊖(下り)」を明記してください。</p>
         </div>
         
         <button class="btn-run" id="btn-run">AIで野帳を読み取る</button>
         
         <div id="loading-msg">
             ⏳ AIが野帳の段差寸法を読み取り中です...<br>
-            <span style="font-size: 0.8rem; color:#666;" id="loading-detail">※手書き文字を解析しています</span>
+            <span style="font-size: 0.8rem; color:#666;" id="loading-detail">※手書き文字と⊕/⊖記号を解析しています</span>
         </div>
 
         <div id="result-area">
             <h2 style="color: var(--primary); border-bottom: 2px solid #ccc; padding-bottom: 5px;">解析結果プレビュー</h2>
             <p style="font-size: 0.85rem; color: #666;">
                 数値を修正すると図形が自動更新されます。<br>
-                <span style="color: var(--pink); font-weight: bold;">桃色の線（地表面）</span>がDXF化されます。（灰色の破線はポールとテープの階段状の補助線です）
+                <span style="color: var(--pink); font-weight: bold;">桃色の線（地表面）</span>がDXF化されます。（灰色の破線は補助線です）
             </p>
 
             <div class="input-group" style="margin-top: 15px;">
@@ -488,21 +488,25 @@
                     階段の【上段（水平線の上）】の数値は水平距離（dx）、【下段（垂直線の横または下）】の数値は垂直距離（dy）を表します。
                     
                     【重要ルール】
-                    1. 画像の【左端から右端に向かって】順番に各段の(dx, dy)の数値を読み取ってください。
-                    2. 階段の「上がり・下がり」を判断してください。
-                       - 階段が【下り】（右下へ進む）の場合、垂直距離(dy)は「プラス」の値にしてください。
-                       - 階段が【上り】（右上へ進む）の場合、垂直距離(dy)は「マイナス」の値にしてください。
-                    3. 一番最初の段の水平距離(dx)も重要なデータです。0にせず、画像に書かれている数値を正確に読み取ってください。
-                    4. 「m」という単位は除外して数値のみ抽出してください。
+                    1. 画像の左側から右側に向かって、順番に各段の(dx, dy)の数値を読み取ってください。
+                    2. 垂直距離(dy)の数値の横には、必ず丸囲みの「⊕（プラス）」または「⊖（マイナス）」の符号が書かれています。
+                       - 「⊖（マイナス）」は標高が下がる（下り）ことを意味します。システム上、dyは【プラス（正の値）】として出力してください。（例: ⊖1m -> 1.0）
+                       - 「⊕（プラス）」は標高が上がる（上り）ことを意味します。システム上、dyは【マイナス（負の値）】として出力してください。（例: ⊕1m -> -1.0）
+                    3. 一番最初の段の水平距離(dx)も重要なデータです。0にせず、画像に書かれている数値を正確に読み取ってください。（水平線がない場合は dx: 0 としてください）
+                    4. 「m」という単位や丸囲み記号は除外して数値のみ抽出してください。
                     5. 複数の画像がアップロードされた場合は、1画像＝1測点として配列に入れてください。
                     
                     出力フォーマット（JSON形式のみ出力。Markdown記法は禁止）:
                     [
                       {
-                        "stationName": "No.1",
+                        "stationName": "No.2",
                         "segments": [
+                          {"dx": 1.0, "dy": 1.0},
+                          {"dx": 2.0, "dy": 1.0},
+                          {"dx": 1.5, "dy": 2.0},
                           {"dx": 2.0, "dy": -1.0},
-                          {"dx": 1.5, "dy": -1.5}
+                          {"dx": 1.5, "dy": -1.0},
+                          {"dx": 2.0, "dy": -1.0}
                         ]
                       }
                     ]
@@ -532,10 +536,7 @@
         btnDxf.addEventListener('click', () => {
             if(parsedData.length === 0) return;
             
-            // 選択または入力された縮尺を取得
             const scale = parseFloat(exportScaleInput.value) || 100;
-            // メートルをDXF上の単位（ミリメートル換算など）にするための倍率
-            // CADで1/100の図面を印刷した時に1m=10mmとして描画されるようにする
             const multiplier = 1000 / scale;
             
             let dxf = `0\nSECTION\n2\nENTITIES\n`;
