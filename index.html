@@ -140,7 +140,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v0.6</h1>
+        <h1>AI横断 v0.7</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -171,15 +171,17 @@
             </p>
 
             <div class="input-group" style="margin-top: 15px;">
-                <label>DXF出力時の縮尺</label>
-                <select id="export-scale">
-                    <option value="50">1/50</option>
-                    <option value="100" selected>1/100</option>
-                    <option value="200">1/200</option>
-                    <option value="250">1/250</option>
-                    <option value="500">1/500</option>
-                </select>
-                <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">※横断面図アプリ等に読み込む際の縮尺に合わせてください。</p>
+                <label>DXF出力時の縮尺 1/</label>
+                <!-- リストから選択も、直接の数値入力も可能にする -->
+                <input type="number" id="export-scale" value="100" min="1" step="1" style="width: 120px; display: inline-block;" list="scale-options">
+                <datalist id="scale-options">
+                    <option value="50">
+                    <option value="100">
+                    <option value="200">
+                    <option value="250">
+                    <option value="500">
+                </datalist>
+                <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">※横断面図アプリ等に読み込む際の縮尺に合わせて任意に入力できます。</p>
             </div>
             
             <div id="stations-container"></div>
@@ -530,7 +532,10 @@
         btnDxf.addEventListener('click', () => {
             if(parsedData.length === 0) return;
             
+            // 選択または入力された縮尺を取得
             const scale = parseFloat(exportScaleInput.value) || 100;
+            // メートルをDXF上の単位（ミリメートル換算など）にするための倍率
+            // CADで1/100の図面を印刷した時に1m=10mmとして描画されるようにする
             const multiplier = 1000 / scale;
             
             let dxf = `0\nSECTION\n2\nENTITIES\n`;
@@ -550,7 +555,7 @@
                     if(dx === 0 && dy === 0) return;
                     
                     let nextX = curX + dx;
-                    let nextY = curY - dy; 
+                    let nextY = curY - dy; // 下り(dy>0)はDXFでは-Y方向
                     
                     const outCurX = curX * multiplier;
                     const outCurY = curY * multiplier;
@@ -563,7 +568,7 @@
                     curY = nextY;
                 });
                 
-                offsetX += 15; 
+                offsetX += 15; // 次の測点は右に15m(実寸)ずらして描画
             });
             
             dxf += `0\nENDSEC\n0\nEOF\n`;
