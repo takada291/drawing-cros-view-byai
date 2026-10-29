@@ -146,7 +146,7 @@
 <body>
 
     <div class="container">
-        <h1>AI横断 v1.0</h1>
+        <h1>AI横断 v1.1</h1>
         
         <div class="api-note">
             <strong>APIキー設定（初回のみ）</strong><br>
@@ -198,8 +198,8 @@
     </div>
 
     <script type="module">
-        // 施業提案アプリの通信ロジックを参考に更新
-        
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
         const btn = document.getElementById('btn-run');
         const loading = document.getElementById('loading-msg');
         const loadingDetail = document.getElementById('loading-detail');
@@ -260,9 +260,6 @@
             }
         }
 
-        // ==========================================
-        // AI通信処理 (3.6最優先 -> 旧キー用2.5フォールバック)
-        // ==========================================
         const MODEL_CANDIDATES = ["gemini-3.6-flash", "gemini-2.5-flash"];
 
         async function fetchWithTimeout(url, options, timeoutMs = 45000) {
@@ -279,7 +276,6 @@
                 const isGemini3 = modelName.startsWith("gemini-3");
                 const payloadWithThinking = JSON.parse(JSON.stringify(basePayload));
                 
-                // 3.6系の場合、空間認識精度を高めるために思考時間を少し確保
                 if (isGemini3) {
                     payloadWithThinking.generationConfig = {
                         ...(payloadWithThinking.generationConfig || {}),
@@ -295,7 +291,6 @@
                     );
                     let data = await response.json();
                     
-                    // エラーハンドリング (400 Bad Request時のフォールバック処理)
                     if (data.error && response.status === 400 && isGemini3) {
                         response = await fetchWithTimeout(
                             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
